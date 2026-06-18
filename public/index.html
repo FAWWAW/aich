@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fawwaw AI - Free Ai Chat</title>
+    <style>
+        /* Impor Font Modern & Minimalis */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+
+        :root {
+            /* Warna Gradien Latar Belakang */
+            --bg-gradient: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            
+            /* Konfigurasi Efek Kaca (Glassmorphism) */
+            --glass-bg: rgba(255, 255, 255, 0.4);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.5);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            
+            /* Konfigurasi Warna UI Minimalis */
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --accent-color: #6c5ce7;
+            --accent-hover: #5b4bc4;
+            --user-bubble: #6c5ce7;
+            --ai-bubble: rgba(255, 255, 255, 0.6);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Wadah Utama Aplikasi (Kaca Melayang) */
+        .app-container {
+            width: 90%;
+            max-width: 1200px;
+            height: 90vh;
+            display: flex;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: var(--glass-border);
+            border-radius: 24px;
+            box-shadow: var(--glass-shadow);
+            overflow: hidden;
+        }
+
+        /* Sidebar Minimalis */
+        .sidebar {
+            width: 280px;
+            background: rgba(255, 255, 255, 0.2);
+            border-right: var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            padding: 30px 20px;
+        }
+
+        .brand-container {
+            margin-bottom: 40px;
+        }
+
+        .brand-name {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+
+        .brand-badge {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--accent-color);
+            background: rgba(108, 92, 231, 0.15);
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .btn-clear {
+            margin-top: auto;
+            background: rgba(255, 255, 255, 0.5);
+            color: var(--text-main);
+            border: var(--glass-border);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-clear:hover {
+            background: rgba(255, 118, 117, 0.8);
+            color: white;
+            border-color: transparent;
+        }
+
+        /* Area Obrolan Utama */
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .chat-box {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* Desain Gelembung Chat (Bubbles) */
+        .message-row {
+            display: flex;
+            flex-direction: column;
+            max-width: 75%;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .message-row.user {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message-row.ai {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .sender-name {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            margin-left: 4px;
+            margin-right: 4px;
+        }
+
+        .message-bubble {
+            padding: 16px 20px;
+            font-size: 15px;
+            line-height: 1.6;
+            border-radius: 20px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .message-row.user .message-bubble {
+            background: var(--user-bubble);
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-row.ai .message-bubble {
+            background: var(--ai-bubble);
+            backdrop-filter: blur(8px);
+            border: var(--glass-border);
+            color: var(--text-main);
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Area Input Minimalis */
+        .input-container {
+            padding: 20px 40px;
+            background: rgba(255, 255, 255, 0.3);
+            border-top: var(--glass-border);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .input-box {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.6);
+            border: var(--glass-border);
+            padding: 16px 24px;
+            border-radius: 30px;
+            font-size: 15px;
+            color: var(--text-main);
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);
+        }
+
+        .input-box::placeholder {
+            color: #a4b0be;
+        }
+
+        .input-box:focus {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+        }
+
+        .btn-send {
+            background: var(--accent-color);
+            color: #fff;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+        }
+
+        .btn-send:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        /* Icon SVG Sederhana untuk Tombol Kirim */
+        .btn-send svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            margin-left: -2px; /* Penyesuaian visual agar panah ke tengah */
+        }
+
+        /* Animasi */
+        .loading {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Penyesuaian untuk Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="brand-container">
+                <div class="brand-name">Fawwaw AI</div>
+                <div class="brand-badge">Beta Edition</div>
+            </div>
+            <button class="btn-clear" id="btn-clear">Bersihkan Sesi</button>
+        </div>
+
+        <div class="main-chat">
+            <div class="chat-box" id="chat-container">
+                <div class="message-row ai">
+                    <div class="sender-name">Fawwaw AI</div>
+                    <div class="message-bubble">Halo! Saya Fawwaw AI. Ada yang bisa saya bantu hari ini?</div>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <input type="text" class="input-box" id="user-input" placeholder="Tuliskan pesan Anda di sini..." autocomplete="off">
+                <button class="btn-send" id="btn-send">
+                    <svg viewBox="0 0 24 24">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const btnSend = document.getElementById('btn-send');
+        const btnClear = document.getElementById('btn-clear');
+
+        // Fungsi menampilkan pesan ke layar
+        function appendMessage(role, text) {
+            const row = document.createElement('div');
+            row.className = `message-row ${role}`;
+            
+            const sender = document.createElement('div');
+            sender.className = 'sender-name';
+            sender.innerText = role === 'user' ? 'Anda' : 'Fawwaw AI';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerText = text;
+
+            row.appendChild(sender);
+            row.appendChild(bubble);
+            chatContainer.appendChild(row);
+            
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return bubble;
+        }
+
+        // Fungsi menampilkan animasi loading
+        function showLoading() {
+            const row = document.createElement('div');
+            row.className = 'message-row ai loading-row';
+            
+            const sender = document.createElement('div');
+            sender.className = 'sender-name';
+            sender.innerText = 'Fawwaw AI';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble loading';
+            bubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+
+            row.appendChild(sender);
+            row.appendChild(bubble);
+            chatContainer.appendChild(row);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return row;
+        }
+
+        async function sendMessage() {
+            const prompt = userInput.value.trim();
+            if (!prompt) return;
+
+            appendMessage('user', prompt);
+            userInput.value = '';
+            userInput.disabled = true;
+            btnSend.disabled = true;
+
+            const loadingRow = showLoading();
+
+            try {
+                // Di belakang layar, backend tetap mengirimkan "model: qwen-max"
+                // sesuai struktur kode server.js Anda, tapi hal ini tidak terlihat di UI.
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt, model: 'qwen-max' })
+                });
+
+                const data = await response.json();
+                
+                // Hapus animasi loading
+                loadingRow.remove();
+
+                if (data.message) {
+                    appendMessage('ai', data.message);
+                } else if (data.error) {
+                    appendMessage('ai', `Mohon maaf, terjadi kendala: ${data.error}`);
+                }
+            } catch (error) {
+                loadingRow.remove();
+                appendMessage('ai', `Sistem Fawwaw terputus dari server.`);
+            } finally {
+                userInput.disabled = false;
+                btnSend.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        async function clearSession() {
+            if(!confirm("Apakah Anda yakin ingin memulai obrolan baru dengan Fawwaw AI?")) return;
+            try {
+                await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_session' })
+                });
+                chatContainer.innerHTML = '';
+                appendMessage('ai', 'Memori obrolan berhasil dibersihkan. Mari mulai dari awal!');
+            } catch(e) { 
+                alert("Gagal membersihkan sesi."); 
+            }
+        }
+
+        btnSend.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => { 
+            if (e.key === 'Enter') sendMessage(); 
+        });
+        btnClear.addEventListener('click', clearSession);
+    </script>
+</body>
+</html>
