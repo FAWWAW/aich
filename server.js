@@ -181,6 +181,12 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server Qwen AI berjalan di http://localhost:${PORT}`);
-});
+// Jalankan server HANYA jika dijalankan di localhost
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Server berjalan di http://localhost:${PORT}`);
+    });
+}
+
+// Baris INI SANGAT PENTING untuk Vercel
+module.exports = app;
