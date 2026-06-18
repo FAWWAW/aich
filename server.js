@@ -1,10 +1,8 @@
 const express = require('express');
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs/promises');
 const path = require('path');
-
-puppeteer.use(StealthPlugin());
+const crypto = require('crypto');
+const axios = require('axios');
 
 const app = express();
 const PORT = 3000;
@@ -12,181 +10,148 @@ const PORT = 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-const SESSION_FILE = path.join(__dirname, "qwenai-session.json");
+// PENTING UNTUK VERCEL: Gunakan folder /tmp karena Vercel hanya mengizinkan penulisan file di sana
+const SESSION_FILE = path.join('/tmp', "fawwaw-session.json");
+const MAX_MESSAGES = 10;
+const TIMEOUT = 60000;
+const SYSTEM_PROMPT = "Kamu adalah Fawwaw AI, asisten virtual yang sangat cerdas, ramah, dan menggunakan bahasa Indonesia yang santai tapi sopan. Jawablah dengan ringkas dan jelas.";
 
-function generateRandomIP() {
-    const ranges = [
-        [1, 1], [2, 2], [5, 5], [23, 23], [27, 27], [31, 31], [36, 36], [37, 37], [39, 39], [42, 42],
-        [46, 46], [49, 49], [50, 50], [60, 60], [114, 114], [117, 117], [118, 118], [119, 119], [120, 120],
-        [121, 121], [122, 122], [123, 123], [124, 124], [125, 125], [126, 126], [180, 180], [182, 182], [183, 183]
-    ];
-    const range = ranges[Math.floor(Math.random() * ranges.length)];
-    const ip = [
-        range[0],
-        Math.floor(Math.random() * 256),
-        Math.floor(Math.random() * 256),
-        Math.floor(Math.random() * 256)
-    ].join('.');
-    return ip;
-}
+function now() { return Date.now(); }
+function randomId() { return crypto.randomUUID(); }
 
-async function loadSession() {
+async function readJson(filePath, fallback) {
   try {
-    const raw = await fs.readFile(SESSION_FILE, "utf8");
-    return JSON.parse(raw);
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
   } catch {
-    return { chat_id: null };
+    return fallback;
   }
 }
 
-async function saveSession(session) {
-  await fs.writeFile(SESSION_FILE, JSON.stringify(session, null, 2), "utf8");
+async function writeJson(filePath, data) {
+  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+}
+
+function createSession() {
+  return {
+    sessionId: randomId(),
+    browserId: randomId(),
+    createdAt: now(),
+    updatedAt: now(),
+    messages: []
+  };
+}
+
+async function getSession() {
+  const data = await readJson(SESSION_FILE, null);
+  
+  if (!data || !Array.isArray(data.messages) || !data.browserId) {
+    const fresh = createSession();
+    await writeJson(SESSION_FILE, fresh);
+    return fresh;
+  }
+  
+  const userCount = data.messages.filter(v => v.role === "user").length;
+  if (userCount >= MAX_MESSAGES) {
+    const fresh = createSession();
+    await writeJson(SESSION_FILE, fresh);
+    return fresh;
+  }
+  return data;
+}
+
+function normalizeMessages(messages) {
+  return messages.map(v => ({
+    pluginId: null,
+    content: String(v.content || ""),
+    role: v.role
+  }));
 }
 
 async function handler(args) {
-  const { action, prompt, model } = args;
+  const { prompt, action } = args;
 
   if (action === 'delete_session') {
     try {
       await fs.unlink(SESSION_FILE);
-      return { content: [{ type: 'text', text: '{"message": "Session deleted successfully."}' }] };
+      return { message: 'Sesi berhasil dihapus.' };
     } catch (error) {
-      return { content: [{ type: 'text', text: '{"message": "No session found to delete."}' }] };
+      return { message: 'Sesi sudah bersih.' };
     }
   }
 
-  if (!prompt || !model) {
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ error: "prompt and model are required for chat" }) }],
-      isError: true
-    };
+  if (!prompt) {
+    return { error: 'Pesan tidak boleh kosong.' };
   }
-
-  const session = await loadSession();
-  const spoofedIp = generateRandomIP();
-
-  // Konfigurasi Puppeteer
-  const browser = await puppeteer.launch({
-    // JIKA ANDA MENGGUNAKAN TERMUX (HP), HAPUS TANDA // DI BAWAH INI:
-    // executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled'
-    ],
-    headless: true // Berjalan di latar belakang tanpa membuka jendela browser
-  });
 
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 800 });
+    const session = await getSession();
+    
+    const messages = [
+      ...normalizeMessages(session.messages),
+      { pluginId: null, content: prompt, fileList: [], role: "user" }
+    ];
 
-    // Spoof IP
-    await page.setRequestInterception(true);
-    page.on('request', interceptedRequest => {
-        const headers = interceptedRequest.headers();
-        headers['X-Forwarded-For'] = spoofedIp;
-        headers['X-Real-IP'] = spoofedIp;
-        headers['Client-IP'] = spoofedIp;
-        headers['True-Client-IP'] = spoofedIp;
-        headers['X-Originating-IP'] = spoofedIp;
-        headers['X-Cluster-Client-IP'] = spoofedIp;
-        headers['Forwarded'] = `for=${spoofedIp}`;
-        interceptedRequest.continue({ headers });
+    const body = {
+      model: {
+        id: "gpt-3.5-turbo",
+        name: "GPT-3.5",
+        maxLength: 12000,
+        tokenLimit: 4000,
+        completionTokenLimit: 2500,
+        deploymentName: "gpt-35"
+      },
+      messages,
+      prompt: SYSTEM_PROMPT,
+      temperature: 0.5,
+      enableConversationPrompt: false
+    };
+
+    const headers = {
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "accept": "*/*",
+      "content-type": "application/json",
+      "origin": "https://chateverywhere.app",
+      "referer": "https://chateverywhere.app/id",
+      "user-browser-id": session.browserId
+    };
+
+    const res = await axios.post("https://chateverywhere.app/api/chat", body, {
+      headers,
+      timeout: TIMEOUT,
+      responseType: "text",
+      validateStatus: () => true
     });
 
-    let apiResolve;
-    const apiPromise = new Promise((resolve) => {
-        apiResolve = resolve;
-    });
+    const text = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
 
-    page.on('response', async (response) => {
-        const responseEndpoint = response.url();
-        if (responseEndpoint.includes('/api/v2/chat/completions') && response.request().method() === 'POST') {
-            try {
-                const text = await response.text();
-                const lines = text.split('\n');
-                let answer = "";
-                let currentChatId = null;
-                for (const line of lines) {
-                    if (line.startsWith('data:')) {
-                        try {
-                            const dataString = line.substring(5).trim();
-                            if (!dataString) continue;
-                            const data = JSON.parse(dataString);
-                            
-                            if (data["response.created"] && data["response.created"].chat_id) {
-                                currentChatId = data["response.created"].chat_id;
-                            }
-
-                            if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
-                                answer += data.choices[0].delta.content;
-                            }
-                        } catch (e) {}
-                    }
-                }
-                apiResolve({ answer, chat_id: currentChatId });
-            } catch (e) {}
-        }
-    });
-
-    // Pergi ke Qwen
-    let targetPath = `https://chat.qwen.ai/?model=${model}`;
-    if (session.chat_id) {
-        targetPath = `https://chat.qwen.ai/c/${session.chat_id}?model=${model}`;
+    if (res.status >= 200 && res.status < 300) {
+      session.messages.push({ role: "user", content: prompt });
+      session.messages.push({ role: "assistant", content: text });
+      session.updatedAt = now();
+      await writeJson(SESSION_FILE, session);
+      
+      return { message: text };
+    } else {
+      return { error: `Server tujuan sibuk (Kode ${res.status}).` };
     }
     
-    await page.goto(targetPath, { waitUntil: 'networkidle2', timeout: 60000 });
-    
-    const inputSelector = 'textarea';
-    await page.waitForSelector(inputSelector, { timeout: 60000 });
-
-    // Ketik prompt dan enter
-    await page.type(inputSelector, prompt);
-    await page.keyboard.press('Enter');
-
-    // Tunggu respons dari interception
-    const { answer, chat_id } = await apiPromise;
-
-    if (chat_id) {
-        session.chat_id = chat_id;
-        await saveSession(session);
-    }
-
-    await browser.close();
-
-    if (!answer) {
-        return { content: [{ type: 'text', text: JSON.stringify({ error: "Gagal menangkap respons dari Qwen" }) }], isError: true };
-    }
-
-    return { content: [{ type: 'text', text: JSON.stringify({ message: answer }) }] };
-
   } catch (error) {
-    if (browser) await browser.close().catch(() => {});
-    return { content: [{ type: 'text', text: JSON.stringify({ error: `Puppeteer Error: ${error.message}` }) }], isError: true };
+    return { error: `Kesalahan internal Vercel: ${error.message}` };
   }
 }
 
-// Endpoint Web
 app.post('/api/chat', async (req, res) => {
-    // Meminta prompt dan model (kita set default modelnya ke qwen-max jika kosong)
-    const { prompt, action, model = "qwen-max" } = req.body;
-    
-    const result = await handler({ prompt, action, model });
-    try {
-        const responseData = JSON.parse(result.content[0].text);
-        res.json(responseData);
-    } catch (e) {
-        res.json({ error: result.content[0].text });
-    }
+    const { prompt, action } = req.body;
+    const result = await handler({ prompt, action });
+    res.json(result);
 });
 
-// Jalankan server HANYA jika dijalankan di localhost
+// Jalankan server lokal untuk komputer Anda
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => {
-        console.log(`Server berjalan di http://localhost:${PORT}`);
+        console.log(`Server Fawwaw berjalan di http://localhost:${PORT}`);
     });
 }
 
-// Baris INI SANGAT PENTING untuk Vercel
+// Ekspor untuk Vercel
 module.exports = app;
